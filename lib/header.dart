@@ -144,12 +144,12 @@ class MainHeader extends StatelessWidget {
                   height: 14,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [brandColor, brandColor.withOpacity(0.7)],
+                      colors: [brandColor, brandColor.withValues(alpha: 0.7)],
                     ),
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: brandColor.withOpacity(0.3),
+                        color: brandColor.withValues(alpha: 0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),

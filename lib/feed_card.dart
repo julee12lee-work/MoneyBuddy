@@ -167,7 +167,7 @@ class _FeedCardState extends State<FeedCard>
         border: Border.all(color: Colors.grey.shade100),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -460,7 +460,7 @@ class _FeedCardState extends State<FeedCard>
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
               color: isSel
-                  ? brandColor.withOpacity(0.1)
+                  ? brandColor.withValues(alpha: 0.1)
                   : const Color(0xFFF8FAFC),
               border: Border.all(
                 color: isSel ? brandColor : Colors.grey.shade200,
