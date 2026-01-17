@@ -29,7 +29,7 @@ class _MonthlyCalendarState extends State<MonthlyCalendar> {
     } else {
       baseColor = const Color(0xFF64748B); // 일반
     }
-    return isBackground ? baseColor.withOpacity(0.1) : baseColor;
+    return isBackground ? baseColor.withValues(alpha: 0.1) : baseColor;
   }
 
   void _navigateMonth(int offset) {

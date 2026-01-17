@@ -10,11 +10,13 @@ import 'package:flutter/material.dart';
 class MainHeader extends StatelessWidget {
   final int budgetRemaining; // 남은 예산액
   final int totalBudget; // 전체 목표 예산액
+  final VoidCallback onMenuPressed; //메뉴 클릭 콜백
 
   const MainHeader({
     super.key,
     required this.budgetRemaining,
     required this.totalBudget,
+    required this.onMenuPressed,
   });
 
   @override
@@ -78,7 +80,7 @@ class MainHeader extends StatelessWidget {
               ),
               // 확장성을 고려한 메뉴 버튼 (환경설정 및 예산 편집 진입점)
               IconButton(
-                onPressed: () => print("메뉴 열기 클릭"),
+                onPressed: onMenuPressed,
                 icon: const Icon(
                   Icons.menu_rounded,
                   color: Color(0xFF1E293B),
@@ -142,12 +144,12 @@ class MainHeader extends StatelessWidget {
                   height: 14,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [brandColor, brandColor.withOpacity(0.7)],
+                      colors: [brandColor, brandColor.withValues(alpha: 0.7)],
                     ),
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: brandColor.withOpacity(0.3),
+                        color: brandColor.withValues(alpha: 0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
