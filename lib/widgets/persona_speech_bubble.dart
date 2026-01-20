@@ -90,8 +90,8 @@ class _PersonaSpeechBubbleState extends State<PersonaSpeechBubble> {
         shape: BoxShape.circle,
         gradient: LinearGradient(
           colors: [
-            widget.color.withOpacity(0.1),
-            widget.color.withOpacity(0.2),
+            widget.color.withValues(alpha: 0.1),
+            widget.color.withValues(alpha: 0.2),
           ],
         ),
       ),
@@ -106,9 +106,9 @@ class _PersonaSpeechBubbleState extends State<PersonaSpeechBubble> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         // 배경과 테두리에 페르소나 컬러 반영
-        color: widget.color.withOpacity(0.08),
+        color: widget.color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: widget.color.withOpacity(0.2), width: 1.5),
+        border: Border.all(color: widget.color.withValues(alpha: 0.2), width: 1.5),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -166,7 +166,7 @@ class _PersonaSpeechBubbleState extends State<PersonaSpeechBubble> {
               padding: const EdgeInsets.only(top: 12),
               decoration: BoxDecoration(
                 border: Border(
-                  top: BorderSide(color: widget.color.withOpacity(0.2)),
+                  top: BorderSide(color: widget.color.withValues(alpha: 0.2)),
                 ),
               ),
               child: Row(
@@ -201,7 +201,7 @@ class _PersonaSpeechBubbleState extends State<PersonaSpeechBubble> {
       left: -8,
       top: 16,
       child: CustomPaint(
-        painter: TrianglePainter(widget.color.withOpacity(0.1)),
+        painter: TrianglePainter(widget.color.withValues(alpha: 0.1)),
       ),
     );
   }
@@ -213,7 +213,7 @@ class _PersonaSpeechBubbleState extends State<PersonaSpeechBubble> {
       children: [
         Text(
           label,
-          style: TextStyle(fontSize: 11, color: widget.color.withOpacity(0.7)),
+          style: TextStyle(fontSize: 11, color: widget.color.withValues(alpha: 0.7)),
         ),
         const SizedBox(height: 4),
         Text(
