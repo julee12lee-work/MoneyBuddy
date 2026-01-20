@@ -1,22 +1,65 @@
 import 'package:flutter/material.dart';
 
-/// 지출 내역의 감정 상태를 정의하는 열거형
-enum EmotionType { happy, satisfied, neutral, regret, sad }
+/// [Project] Buddy - AI 가계부 서비스
+/// [File] FeedCard - 지출 내역 카드 컴포넌트
+/// [Author] 이준수 (PM & Design & Frontend)
+/// [Description] 
+/// 개별 지출 내역을 표시하고 상세 정보를 확장/편집할 수 있는 카드 위젯
+/// 기록 탭(메모, 감정)과 분석 탭(예산 현황)을 제공
+/// 
+/// * [Collaborators Note]
+/// - 광진: Firebase Firestore에 지출 데이터 저장/수정 로직 추가 예정
+/// - 광진: 실시간 예산 계산을 서버에서 받아오도록 변경 필요
+/// - 원준: 메모 입력 시 AI 자동 완성 기능 추가 예정
+/// - 준수: 감정 선택 시 햅틱 피드백 추가 예정
+/// 
+/// * [Future Features]
+/// - 영수증 이미지 첨부
+/// - 위치 정보 자동 저장
+/// - 반복 지출 설정
 
-/// [FeedCard] 지출 내역을 표시하는 개별 카드 컴포넌트입니다.
-///
-/// 기능:
-/// 1. 지출 내역 요약 표시 (아이콘, 제목, 금액)
-/// 2. 카드 클릭 시 상세 영역 확장 (기록/분석 탭)
-/// 3. 아이콘 클릭 시 카테고리 및 아이콘 변경 (Bottom Sheet)
-/// 4. 탭 전환 시 높이 애니메이션 최적화 제어
+// --- [A] 열거형 정의 ---
+
+/// 지출 시 느낀 감정을 나타내는 열거형
+/// [Usage] 사용자의 소비 패턴 분석 및 피드백 개인화에 활용
+enum EmotionType {
+  happy,     // 😊 기쁨 - 만족스러운 소비
+  satisfied, // 😌 만족 - 필요한 소비
+  neutral,   // 😐 보통 - 평범한 소비
+  regret,    // 😔 후회 - 불필요한 소비
+  sad,       // 😢 슬픔 - 과소비
+}
+
+// --- [B] 메인 위젯 정의 ---
+
+/// FeedCard: 지출 내역 표시 및 관리 카드
+/// [Features]
+/// 1. 지출 요약 표시 (아이콘, 제목, 금액)
+/// 2. 확장 가능한 상세 정보 영역
+/// 3. 카테고리 변경 (BottomSheet)
+/// 4. 기록/분석 탭 전환
 class FeedCard extends StatefulWidget {
-  final String icon; // 초기 아이콘 (이모지)
-  final String? title; // 지출 제목 (예: 스타벅스)
-  final int amount; // 지출 금액
-  final String category; // 지출 카테고리 (예: 카페)
-  final int budgetRemaining; // 해당 카테고리 남은 예산
-  final int budgetTotal; // 해당 카테고리 전체 예산
+  /// 초기 카테고리 아이콘 (이모지)
+  final String icon;
+  
+  /// 지출 제목 (예: "스타벅스")
+  /// [Null] null일 경우 카테고리명 사용
+  final String? title;
+  
+  /// 지출 금액
+  /// [Negative] 지출은 음수, 수입은 양수
+  final int amount;
+  
+  /// 지출 카테고리 (예: "카페", "식비")
+  final String category;
+  
+  /// 해당 카테고리의 남은 예산
+  /// * [광진 TODO] Firestore에서 실시간 계산
+  final int budgetRemaining;
+  
+  /// 해당 카테고리의 전체 예산
+  /// * [광진 TODO] 사용자 설정에서 가져오기
+  final int budgetTotal;
 
   const FeedCard({
     super.key,
@@ -34,25 +77,48 @@ class FeedCard extends StatefulWidget {
 
 class _FeedCardState extends State<FeedCard>
     with SingleTickerProviderStateMixin {
-  // --- 상태 관리 변수 ---
-  bool isExpanded = false; // 카드 확장 여부
-  String activeTab = '기록'; // 현재 활성화된 상세 탭 ('기록' 또는 '분석')
+  
+  // --- [C] 상태 관리 영역 ---
+  
+  /// 카드 확장 여부
+  /// [State] false: 요약만 표시, true: 상세 정보 표시
+  bool isExpanded = false;
+  
+  /// 현재 활성화된 상세 탭
+  /// [Values] '기록' 또는 '분석'
+  String activeTab = '기록';
 
-  /// 애니메이션 지속 시간 (Dynamic Duration)
-  /// 카드를 열고 닫을 때는 300ms를 사용하고, 탭 전환 시에는 0ms로 변경하여
-  /// 테두리가 덜컹거리는 애니메이션을 방지합니다.
+  /// 애니메이션 지속 시간 (동적 제어)
+  /// [Logic] 카드 열기/닫기: 300ms, 탭 전환: 0ms (깜빡임 방지)
   Duration _animatedSizeDuration = const Duration(milliseconds: 300);
 
-  late String currentIcon; // 현재 선택된 아이콘
-  late String currentCategory; // 현재 선택된 카테고리
-  late TextEditingController _nameController; // 제목 수정용 컨트롤러
-  late TextEditingController _memoController; // 메모 입력용 컨트롤러
-  EmotionType? selectedEmotion; // 선택된 감정 상태
+  /// 현재 선택된 아이콘
+  /// [Editable] 사용자가 카테고리 변경 시 업데이트
+  late String currentIcon;
+  
+  /// 현재 선택된 카테고리
+  /// [Editable] 사용자가 카테고리 변경 시 업데이트
+  late String currentCategory;
+  
+  /// 제목 입력 컨트롤러
+  /// [Usage] 기록 탭에서 별명 수정
+  late TextEditingController _nameController;
+  
+  /// 메모 입력 컨트롤러
+  /// [Usage] 기록 탭에서 간단 메모 작성
+  /// * [원준 TODO] AI 자동 완성 기능 추가
+  late TextEditingController _memoController;
+  
+  /// 선택된 감정 상태
+  /// [Nullable] 선택하지 않을 수도 있음
+  EmotionType? selectedEmotion;
 
-  /// 브랜드 메인 컬러 (민트 테마)
+  /// 브랜드 메인 컬러 (테마에서 가져옴)
   Color get brandColor => Theme.of(context).colorScheme.primary;
 
-  /// 카테고리 변경 시 사용할 옵션 리스트
+  /// 카테고리 변경 시 선택 가능한 옵션 리스트
+  /// * [준수 TODO] 사용자 커스텀 카테고리 추가 기능 필요
+  /// * [광진 TODO] Firestore에서 동적으로 불러오기
   final List<Map<String, String>> categoryOptions = [
     {'icon': '☕', 'label': '카페'},
     {'icon': '🍔', 'label': '식비'},
@@ -61,6 +127,8 @@ class _FeedCardState extends State<FeedCard>
     {'icon': '🍺', 'label': '술/유흥'},
     {'icon': '🎁', 'label': '선물'},
   ];
+
+  // --- [D] 라이프사이클 메서드 ---
 
   @override
   void initState() {
@@ -75,12 +143,16 @@ class _FeedCardState extends State<FeedCard>
 
   @override
   void dispose() {
+    // [Important] 메모리 누수 방지
     _nameController.dispose();
     _memoController.dispose();
     super.dispose();
   }
 
-  /// 숫자를 3자리 단위로 콤마가 포함된 금액 문자열로 변환합니다.
+  // --- [E] 유틸리티 메서드 ---
+
+  /// 숫자를 천 단위 콤마 포맷으로 변환
+  /// [Example] 5500 → "5,500" / 287000 → "287,000"
   String _formatCurrency(int amount) {
     return amount.abs().toString().replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
@@ -88,7 +160,11 @@ class _FeedCardState extends State<FeedCard>
     );
   }
 
-  /// 아이콘 클릭 시 카테고리를 변경할 수 있는 BottomSheet를 표시합니다.
+  // --- [F] 비즈니스 로직 메서드 ---
+
+  /// 카테고리 선택 BottomSheet 표시
+  /// [UX] 그리드 형태로 카테고리 옵션 제공
+  /// * [광진 TODO] 선택 후 Firestore에 업데이트
   void _showCategoryPicker() {
     showModalBottomSheet(
       context: context,
@@ -107,6 +183,8 @@ class _FeedCardState extends State<FeedCard>
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 20),
+              
+              // [Grid] 카테고리 옵션 그리드
               GridView.builder(
                 shrinkWrap: true,
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -124,6 +202,15 @@ class _FeedCardState extends State<FeedCard>
                         currentCategory = categoryOptions[index]['label']!;
                       });
                       Navigator.pop(context);
+                      
+                      // * [광진 TODO] Firestore 업데이트
+                      // await FirebaseFirestore.instance
+                      //   .collection('expenses')
+                      //   .doc(expenseId)
+                      //   .update({
+                      //     'icon': currentIcon,
+                      //     'category': currentCategory,
+                      //   });
                     },
                     child: Container(
                       decoration: BoxDecoration(
@@ -153,6 +240,36 @@ class _FeedCardState extends State<FeedCard>
     );
   }
 
+  /// 지출 데이터 저장
+  /// * [광진 TODO] Firebase에 메모, 감정, 별명 저장
+  Future<void> _saveExpenseData() async {
+    // * [광진 연동 포인트]
+    // try {
+    //   await FirebaseFirestore.instance
+    //     .collection('expenses')
+    //     .doc(expenseId)
+    //     .update({
+    //       'name': _nameController.text,
+    //       'memo': _memoController.text,
+    //       'emotion': selectedEmotion?.toString(),
+    //       'updatedAt': FieldValue.serverTimestamp(),
+    //     });
+    //   
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     SnackBar(content: Text('저장되었습니다')),
+    //   );
+    // } catch (e) {
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     SnackBar(content: Text('저장 실패: $e')),
+    //   );
+    // }
+    
+    // [임시] 카드 닫기
+    setState(() => isExpanded = false);
+  }
+
+  // --- [G] UI 렌더링 영역 ---
+
   @override
   Widget build(BuildContext context) {
     bool isNegative = widget.amount < 0;
@@ -175,92 +292,30 @@ class _FeedCardState extends State<FeedCard>
       ),
       child: Column(
         children: [
-          // --- 1. 카드 상단 (헤더) 영역 ---
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Row(
-              children: [
-                // 아이콘 (카테고리 변경 트리거)
-                GestureDetector(
-                  onTap: _showCategoryPicker,
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFFF1F5F9),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      currentIcon,
-                      style: const TextStyle(fontSize: 20),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // 제목 및 카테고리 텍스트 (확장 트리거)
-                Expanded(
-                  child: InkWell(
-                    onTap: () {
-                      setState(() {
-                        // 카드를 열고 닫을 때는 부드러운 애니메이션(300ms) 적용
-                        _animatedSizeDuration = const Duration(
-                          milliseconds: 300,
-                        );
-                        isExpanded = !isExpanded;
-                      });
-                    },
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _nameController.text,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          currentCategory,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                // 금액 표시
-                Text(
-                  "${isNegative ? '-' : '+'}${_formatCurrency(widget.amount)}원",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: isNegative ? Colors.red : brandColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // [Section 1] 카드 헤더 (요약 정보)
+          _buildCardHeader(isNegative),
 
-          // --- 2. 상세 정보 확장 영역 (애니메이션 적용) ---
+          // [Section 2] 상세 정보 확장 영역 (애니메이션)
           AnimatedSize(
             duration: _animatedSizeDuration,
             curve: Curves.easeInOut,
             child: SizedBox(
               width: double.infinity,
               child: !isExpanded
-                  ? const SizedBox.shrink() // 닫혔을 때는 공간 차지 없음
+                  ? const SizedBox.shrink() // 닫혔을 때
                   : Padding(
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                       child: Column(
                         children: [
                           const Divider(height: 1),
                           const SizedBox(height: 16),
-                          _buildSegmentedTab(), // 기록/분석 탭 선택바
+                          
+                          // [Component] 기록/분석 탭 전환 바
+                          _buildSegmentedTab(),
+                          
                           const SizedBox(height: 16),
-                          // 탭 선택에 따른 조건부 렌더링
+                          
+                          // [Component] 선택된 탭 내용 표시
                           activeTab == '기록'
                               ? _buildRecordTab()
                               : _buildAnalysisTab(budgetUsed, budgetPercentage),
@@ -274,7 +329,80 @@ class _FeedCardState extends State<FeedCard>
     );
   }
 
-  /// [기록/분석] 전환용 세그먼트 탭 바 위젯을 생성합니다.
+  // --- [H] 컴포넌트 빌더 메서드 ---
+
+  /// 카드 헤더 (아이콘, 제목, 금액)
+  Widget _buildCardHeader(bool isNegative) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Row(
+        children: [
+          // [Component 1] 카테고리 아이콘 (탭 시 변경 가능)
+          GestureDetector(
+            onTap: _showCategoryPicker,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xFFF1F5F9),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                currentIcon,
+                style: const TextStyle(fontSize: 20),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          
+          // [Component 2] 제목 및 카테고리 (탭 시 확장)
+          Expanded(
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  // [Animation] 카드 열기/닫기는 300ms 애니메이션
+                  _animatedSizeDuration = const Duration(milliseconds: 300);
+                  isExpanded = !isExpanded;
+                });
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _nameController.text,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    currentCategory,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          // [Component 3] 금액 표시
+          Text(
+            "${isNegative ? '-' : '+'}${_formatCurrency(widget.amount)}원",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: isNegative ? Colors.red : brandColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 기록/분석 전환용 세그먼트 탭 바
   Widget _buildSegmentedTab() {
     return Container(
       padding: const EdgeInsets.all(4),
@@ -282,19 +410,23 @@ class _FeedCardState extends State<FeedCard>
         color: const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(100),
       ),
-      child: Row(children: [_buildTabButton('기록'), _buildTabButton('분석')]),
+      child: Row(
+        children: [
+          _buildTabButton('기록'),
+          _buildTabButton('분석'),
+        ],
+      ),
     );
   }
 
-  /// 탭 바 내부의 개별 버튼 위젯을 생성합니다.
+  /// 개별 탭 버튼
   Widget _buildTabButton(String label) {
     bool isActive = activeTab == label;
     return Expanded(
       child: GestureDetector(
         onTap: () {
           setState(() {
-            // 탭 전환 시에는 배경 크기가 부드럽게 변하지 않고
-            // 즉시(0ms) 바뀌도록 설정하여 어색함을 제거합니다.
+            // [Animation] 탭 전환 시에는 즉시(0ms) 변경 (깜빡임 방지)
             _animatedSizeDuration = Duration.zero;
             activeTab = label;
           });
@@ -319,13 +451,12 @@ class _FeedCardState extends State<FeedCard>
     );
   }
 
-  // --- 상세 화면 구성 위젯 (서브 위젯) ---
-
-  /// [기록 탭] 별명, 메모, 감정 상태를 입력받는 영역입니다.
+  /// 기록 탭: 별명, 메모, 감정 입력
   Widget _buildRecordTab() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // [Field 1] 별명 입력
         const Text(
           "별명",
           style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
@@ -339,6 +470,8 @@ class _FeedCardState extends State<FeedCard>
           ),
         ),
         const SizedBox(height: 16),
+        
+        // [Field 2] 메모 입력
         const Text(
           "간단 메모",
           style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
@@ -354,13 +487,17 @@ class _FeedCardState extends State<FeedCard>
           ),
         ),
         const SizedBox(height: 16),
-        _buildEmotionSelector(), // 감정 아이콘 선택 영역
+        
+        // [Field 3] 감정 선택
+        _buildEmotionSelector(),
+        
         const SizedBox(height: 20),
-        // 저장 버튼
+        
+        // [Button] 저장 버튼
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: () => setState(() => isExpanded = false),
+            onPressed: _saveExpenseData,
             style: ElevatedButton.styleFrom(
               backgroundColor: brandColor,
               foregroundColor: Colors.white,
@@ -379,7 +516,7 @@ class _FeedCardState extends State<FeedCard>
     );
   }
 
-  /// [분석 탭] 현재 카테고리의 예산 사용 현황을 프로그레스 바로 표시합니다.
+  /// 분석 탭: 예산 사용 현황
   Widget _buildAnalysisTab(int budgetUsed, double percentage) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -390,6 +527,7 @@ class _FeedCardState extends State<FeedCard>
       ),
       child: Column(
         children: [
+          // [Row 1] 카테고리명 및 남은 예산
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -408,7 +546,8 @@ class _FeedCardState extends State<FeedCard>
             ],
           ),
           const SizedBox(height: 8),
-          // 예산 사용량 프로그레스 바
+          
+          // [Progress Bar] 예산 사용량 프로그레스 바
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: LinearProgressIndicator(
@@ -416,11 +555,13 @@ class _FeedCardState extends State<FeedCard>
               minHeight: 8,
               backgroundColor: Colors.grey.shade200,
               color: percentage > 0.9
-                  ? Colors.red
-                  : brandColor, // 90% 이상 사용 시 경고색(빨간색)
+                  ? Colors.red // [Warning] 90% 이상 사용 시 경고색
+                  : brandColor,
             ),
           ),
           const SizedBox(height: 8),
+          
+          // [Row 2] 사용 금액 / 전체 예산
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -439,7 +580,8 @@ class _FeedCardState extends State<FeedCard>
     );
   }
 
-  /// 5가지 감정 아이콘 선택기를 생성합니다.
+  /// 감정 아이콘 선택기 (5가지 감정)
+  /// * [준수 TODO] 선택 시 햅틱 피드백 추가
   Widget _buildEmotionSelector() {
     final List<Map<String, dynamic>> emotions = [
       {'type': EmotionType.happy, 'emoji': '😊', 'label': '기쁨'},
@@ -452,18 +594,23 @@ class _FeedCardState extends State<FeedCard>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: emotions.map((e) {
-        bool isSel = selectedEmotion == e['type'];
+        bool isSelected = selectedEmotion == e['type'];
         return GestureDetector(
-          onTap: () => setState(() => selectedEmotion = e['type']),
+          onTap: () {
+            setState(() => selectedEmotion = e['type']);
+            
+            // * [준수 TODO] 햅틱 피드백
+            // HapticFeedback.lightImpact();
+          },
           child: Container(
             width: 58,
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
-              color: isSel
+              color: isSelected
                   ? brandColor.withValues(alpha: 0.1)
                   : const Color(0xFFF8FAFC),
               border: Border.all(
-                color: isSel ? brandColor : Colors.grey.shade200,
+                color: isSelected ? brandColor : Colors.grey.shade200,
               ),
               borderRadius: BorderRadius.circular(12),
             ),
@@ -474,7 +621,7 @@ class _FeedCardState extends State<FeedCard>
                   e['label'],
                   style: TextStyle(
                     fontSize: 10,
-                    color: isSel ? brandColor : const Color(0xFF64748B),
+                    color: isSelected ? brandColor : const Color(0xFF64748B),
                   ),
                 ),
               ],
