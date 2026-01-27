@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // [추천] 천 단위 콤마 포맷팅을 위한 패키지
 import '../constants/app_colors.dart';
 import '../constants/app_dimensions.dart';
+import '../constants/app_text_styles.dart';
 
 /// [Project] Buddy - AI 가계부 서비스
 /// [Author] 이준수 (PM & Design & Frontend)
@@ -142,12 +143,24 @@ class MainHeader extends StatelessWidget {
     );
   }
 
-  Widget _buildProgressLabels(Color brandColor, double used, double remaining) {
+Widget _buildProgressLabels(Color brandColor, double used, double remaining) {
+  // 1. 소비 비율을 먼저 반올림하여 정수로 만듭니다.
+  final int usedPercent = (used * 100).round();
+  
+  // 2. 잔여 비율은 무조건 '100 - 소비비율'로 계산하여 합계를 100으로 맞춥니다.
+  final int remainingPercent = 100 - usedPercent;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text('소비 ${(used * 100).toInt()}%', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-        Text('잔여 ${(remaining * 100).toInt()}%', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: brandColor)),
+        Text(
+          '소비 $usedPercent%', 
+          style: AppTextStyles.caption.copyWith(color: AppColors.textTertiary)
+        ),
+        Text(
+          '잔여 $remainingPercent%', 
+          style: AppTextStyles.captionBold.copyWith(color: brandColor)
+        ),
       ],
     );
   }

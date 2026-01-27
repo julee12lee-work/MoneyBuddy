@@ -10,7 +10,7 @@ import '../constants/app_text_styles.dart';
 /// [Author] 이준수 (PM & Design)
 /// [Description] 
 /// 자연어 입력 후 파싱된 금액을 확인하고, 최종 카테고리를 결정하는 그리드 보드입니다.
-/// 
+/// flutter pub add intl
 
 class CategorySelectionBoard extends StatelessWidget {
   final int amount;
