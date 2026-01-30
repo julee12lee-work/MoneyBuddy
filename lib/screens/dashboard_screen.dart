@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import '../models/persona.dart';
+import '../models/expense.dart';
+import '../models/expense_draft.dart';
+
 import '../constants/app_colors.dart';
 import '../constants/app_dimensions.dart';
+
+import '../services/firestore_service.dart';
+
 import '../widgets/main_header.dart';
 import '../widgets/feed_header.dart';
 import '../widgets/feed_card.dart';
@@ -11,21 +19,9 @@ import '../widgets/side_menu.dart';
 import '../widgets/floating_input.dart';
 import '../widgets/category_selection_board.dart';
 
-/// [Project] Buddy - AI 가계부 서비스
-/// [File] DashboardScreen - 메인 대시보드 화면
-/// [Author] 이준수 (PM & Design & Frontend)
-/// [Description] 
-/// 사용자의 지출 내역을 관리하고 AI 버디의 피드백을 받는 메인 화면
-/// 리스트 뷰와 캘린더 뷰를 전환할 수 있으며, 자연어 입력을 통한 지출 기록 기능 제공
-/// 
-/// * [Collaborators Note]
-/// - 원준: SmartInputBar(FloatingInput)의 NLP 파싱 로직 고도화 담당
-/// - 광진: 사이드 메뉴 애니메이션 및 페르소나 말풍선 인터랙션 개선 담당
-/// - 추후 백엔드 연동 시 Mock 데이터를 API 호출로 교체 예정
-
 class DashboardScreen extends StatefulWidget {
   final int selectedPersonaIndex;
-  
+
   const DashboardScreen({
     super.key,
     required this.selectedPersonaIndex,
@@ -36,28 +32,44 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // --- [A] 상태 관리 영역 ---
-  
   bool isCategoryMode = false;
-  int? tempAmount;
-  bool isMenuOpen = false;
-  String viewMode = 'list'; // ← [Fix] 'calendar' → 'list'로 변경!
+  int? tempAmount; // 양수 금액
+  String? tempTitle;
 
-  // --- [B] UI 렌더링 영역 ---
+  bool isMenuOpen = false;
+  String viewMode = 'list';
+
+  DateTime _calendarSelectedDate = DateTime.now();
+
+  // 삭제 UI 문구(상수 파일에 없을 수 있어서 여기서 직접 관리)
+  static const String _deleteTitle = '지출 삭제';
+  static const String _deleteMessage = '이 내역을 삭제할까요?';
+  static const String _cancelText = '취소';
+  static const String _deleteText = '삭제';
+  static const String _deletedSnack = '삭제되었습니다.';
+  static const String _deleteFailedSnack = '삭제에 실패했습니다.';
 
   @override
   Widget build(BuildContext context) {
-    // [Data] 선택된 페르소나 데이터 및 브랜드 컬러 로드
     final selectedPersona = personaData[widget.selectedPersonaIndex];
     final Color personaColor = selectedPersona.color;
     const Color brandColor = AppColors.primary;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(child: Text('로그인이 필요합니다.')),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
       resizeToAvoidBottomInset: false,
       body: Center(
         child: Container(
-          constraints: const BoxConstraints(maxWidth: AppDimensions.maxContentWidth),
+          constraints:
+          const BoxConstraints(maxWidth: AppDimensions.maxContentWidth),
           decoration: const BoxDecoration(
             color: AppColors.background,
             boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)],
@@ -66,28 +78,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
             fit: StackFit.expand,
             children: [
               Positioned.fill(
-                child: _buildMainScrollArea(personaColor, brandColor),
+                child: _buildMainScrollArea(
+                  uid: user.uid,
+                  personaColor: personaColor,
+                  brandColor: brandColor,
+                ),
               ),
-
               if (isMenuOpen)
                 GestureDetector(
                   onTap: () => setState(() => isMenuOpen = false),
                   child: Container(
-                    color: Colors.black.withValues(alpha: 0.3),
+                    color: Colors.black.withOpacity(0.3),
                   ),
                 ),
-
               _buildSideMenuDrawer(),
-
               if (!isMenuOpen && !isCategoryMode)
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: SafeArea(
                     top: false,
                     child: FloatingInput(
+                      // 기존 파서(금액만)
                       onAmountParsed: (amount) {
                         setState(() {
                           tempAmount = amount;
+                          isCategoryMode = true;
+                        });
+                      },
+                      // 개선 파서(제목 포함)
+                      onDraftParsed: (ExpenseDraft draft) {
+                        setState(() {
+                          tempAmount = draft.amountAbs;
+                          tempTitle = draft.title;
                           isCategoryMode = true;
                         });
                       },
@@ -101,49 +123,128 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- [C] 컴포넌트 빌더 메서드 ---
+  Widget _buildMainScrollArea({
+    required String uid,
+    required Color personaColor,
+    required Color brandColor,
+  }) {
+    return StreamBuilder<List<Expense>>(
+      stream: FirestoreService.watchThisMonthExpenses(uid),
+      builder: (context, snapshot) {
+        final expenses = snapshot.data ?? const <Expense>[];
 
-  Widget _buildMainScrollArea(Color personaColor, Color brandColor) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: AppDimensions.bottomInputPadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          MainHeader(
-            budgetRemaining: 2847500,
-            totalBudget: 5000000,
-            selectedPersonaIndex: widget.selectedPersonaIndex,
-            onMenuPressed: () => setState(() => isMenuOpen = true),
+        // MVP: 예산은 임시 고정. 이번달 지출(음수) 합산으로 남은 예산 계산.
+        const int totalBudget = 5000000;
+        final int sum = expenses.fold<int>(0, (s, e) => s + e.amount); // 지출 음수
+        final int budgetRemaining = totalBudget + sum;
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: AppDimensions.bottomInputPadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              MainHeader(
+                budgetRemaining: budgetRemaining,
+                totalBudget: totalBudget,
+                selectedPersonaIndex: widget.selectedPersonaIndex,
+                onMenuPressed: () => setState(() => isMenuOpen = true),
+              ),
+              const SizedBox(height: AppDimensions.cardSpacing),
+
+              if (isCategoryMode)
+                CategorySelectionBoard(
+                  amount: tempAmount ?? 0,
+                  brandColor: brandColor,
+                  onCategorySelected: (category) async {
+                    await _saveExpense(uid: uid, category: category);
+                  },
+                  onCancel: () {
+                    setState(() {
+                      isCategoryMode = false;
+                      tempAmount = null;
+                      tempTitle = null;
+                    });
+                  },
+                )
+              else ...[
+                FeedHeader(
+                  viewMode: viewMode,
+                  onViewModeChange: (mode) => setState(() => viewMode = mode),
+                ),
+                const SizedBox(height: AppDimensions.cardSpacing),
+
+                // ✅ 여기(달력/리스트 분기) 문법 깨졌던 부분을 정상 형태로 정리
+                viewMode == 'calendar'
+                    ? Column(
+                  children: [
+                    MonthlyCalendar(
+                      expenses: expenses,
+                      onDateSelected: (date) {
+                        setState(() => _calendarSelectedDate = date);
+                      },
+                    ),
+                    const SizedBox(height: AppDimensions.cardSpacing),
+                    _buildSelectedDayExpenses(
+                      expenses: expenses,
+                      selectedDate: _calendarSelectedDate,
+                      personaColor: personaColor,
+                    ),
+                  ],
+                )
+                    : _buildTransactionList(
+                  uid: uid,
+                  expenses: expenses,
+                  personaColor: personaColor,
+                ),
+              ],
+            ],
           ),
-          const SizedBox(height: AppDimensions.cardSpacing),
-
-          if (isCategoryMode)
-            CategorySelectionBoard(
-              amount: tempAmount ?? 0,
-              brandColor: brandColor,
-              onCategorySelected: (category) {
-                setState(() => isCategoryMode = false);
-              },
-              onCancel: () {
-                setState(() {
-                  isCategoryMode = false;
-                  tempAmount = null;
-                });
-              },
-            )
-          else ...[
-            FeedHeader(
-              viewMode: viewMode,
-              onViewModeChange: (mode) => setState(() => viewMode = mode),
-            ),
-            const SizedBox(height: AppDimensions.cardSpacing),
-            viewMode == 'calendar'
-                ? const MonthlyCalendar()
-                : _buildTransactionList(personaColor),
-          ],
-        ],
-      ),
+        );
+      },
     );
+  }
+
+  Future<void> _saveExpense({
+    required String uid,
+    required String category,
+  }) async {
+    final amountAbs = tempAmount;
+    if (amountAbs == null || amountAbs <= 0) return;
+
+    final title =
+    (tempTitle?.trim().isNotEmpty == true) ? tempTitle!.trim() : category;
+
+    try {
+      await FirestoreService.addExpense(
+        uid: uid,
+        title: title,
+        category: category,
+        amountAbs: amountAbs,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        isCategoryMode = false;
+        tempAmount = null;
+        tempTitle = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('지출이 저장되었습니다.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('저장 실패: $e'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Widget _buildSideMenuDrawer() {
@@ -170,49 +271,180 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildTransactionList(Color personaColor) {
+  Widget _buildTransactionList({
+    required String uid,
+    required List<Expense> expenses,
+    required Color personaColor,
+  }) {
+    if (expenses.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingMedium + 4),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.grey.shade100),
+          ),
+          child: const Text(
+            '아직 이번 달 지출 내역이 없어요.\n아래 입력창에서 “커피 1000”처럼 입력해보세요!',
+            style: TextStyle(color: Colors.black54),
+          ),
+        ),
+      );
+    }
+
+    final widgets = <Widget>[];
+
+    for (final e in expenses) {
+      widgets.add(
+        Dismissible(
+          key: ValueKey('expense_${e.id}'),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            alignment: Alignment.centerRight,
+            decoration: BoxDecoration(
+              color: AppColors.error,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Icon(Icons.delete_rounded, color: Colors.white),
+                SizedBox(width: 8),
+                Text(
+                  '삭제',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+          confirmDismiss: (_) async {
+            final ok = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text(_deleteTitle),
+                content: const Text(_deleteMessage),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text(_cancelText),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text(_deleteText),
+                  ),
+                ],
+              ),
+            );
+            return ok ?? false;
+          },
+          onDismissed: (_) async {
+            try {
+              await FirestoreService.deleteExpense(uid: uid, expenseId: e.id);
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(_deletedSnack),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            } catch (_) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(_deleteFailedSnack),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          },
+          child: FeedCard(
+            icon: e.icon,
+            title: e.title,
+            amount: e.amount,
+            category: e.category,
+          ),
+        ),
+      );
+
+      // 말풍선 로직 유지
+      final abs = e.amount.abs();
+      if (e.category == '카페') {
+        widgets.add(
+          PersonaSpeechBubble(
+            previewMessage: "카페 지출이 기록됐어요!",
+            fullMessage: "${e.title}에 ${abs}원 썼네요. 내일은 집커피도 좋아요 🙂",
+            type: "positive",
+            relatedTo: e.title,
+            amount: abs,
+            color: personaColor,
+          ),
+        );
+      }
+
+      widgets.add(const SizedBox(height: AppDimensions.cardSpacing));
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingMedium + 4),
-      child: Column(
-        children: [
-          const FeedCard(
-            icon: "☕",
-            title: "스타벅스",
-            amount: -5500,
-            category: "카페",
-          ),
-          PersonaSpeechBubble(
-            previewMessage: "오늘도 스타벅스네요!",
-            fullMessage: "카페 지출이 늘고 있어요. 내일은 집 커피 어떠세요?",
-            type: "positive",
-            relatedTo: "스타벅스",
-            amount: 5500,
-            color: personaColor,
-          ),
-          const SizedBox(height: AppDimensions.cardSpacing),
-          const FeedCard(
-            icon: "🚗",
-            title: "카카오택시",
-            amount: -18750,
-            category: "교통",
-          ),
-          const SizedBox(height: AppDimensions.cardSpacing),
-          const FeedCard(
-            icon: "🛍️",
-            title: "백화점 쇼핑",
-            amount: -287000,
-            category: "쇼핑",
-          ),
-          PersonaSpeechBubble(
-            previewMessage: "예산을 조금 넘겼어요!",
-            fullMessage: "우와, 이번 지출은 조금 컸네요!",
-            type: "warning",
-            relatedTo: "백화점 쇼핑",
-            amount: 287000,
-            color: personaColor,
-          ),
-        ],
+      child: Column(children: widgets),
+    );
+  }
+
+  Widget _buildSelectedDayExpenses({
+    required List<Expense> expenses,
+    required DateTime selectedDate,
+    required Color personaColor,
+  }) {
+    bool isSameDate(DateTime a, DateTime b) =>
+        a.year == b.year && a.month == b.month && a.day == b.day;
+
+    final dayExpenses = expenses.where((e) {
+      final ts = e.createdAt;
+      if (ts == null) return false;
+      return isSameDate(ts.toDate(), selectedDate);
+    }).toList();
+
+    final title = '${selectedDate.month}월 ${selectedDate.day}일 내역';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingMedium + 4),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey.shade100),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            if (dayExpenses.isEmpty)
+              const Text(
+                '선택한 날짜에 지출 내역이 없어요.',
+                style: TextStyle(color: Colors.black54),
+              )
+            else
+              Column(
+                children: dayExpenses.map((e) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: FeedCard(
+                      icon: e.icon,
+                      title: e.title,
+                      amount: e.amount,
+                      category: e.category,
+                    ),
+                  );
+                }).toList(),
+              ),
+          ],
+        ),
       ),
     );
   }
