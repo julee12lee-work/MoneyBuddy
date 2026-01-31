@@ -9,9 +9,8 @@ import '../constants/app_colors.dart';
 import '../constants/app_dimensions.dart';
 import '../constants/app_strings.dart';
 import '../constants/app_text_styles.dart';
+import '../services/firestore_service.dart';
 
-/// [Project] Buddy - AI 가계부 서비스
-/// [File] LoginScreen - 로그인/온보딩 화면
 class LoginScreen extends StatefulWidget {
   final VoidCallback onLoginSuccess;
 
@@ -25,13 +24,9 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // --- [A] 상태 관리 영역 ---
   bool _isLoading = false;
 
-  // --- [B] 비즈니스 로직 영역 ---
-
   Future<UserCredential?> _signInWithGoogle() async {
-    // google_sign_in은 Windows 데스크톱 지원 대상이 아님(Android/iOS/macOS/web 중심)
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
       throw UnsupportedError(
         'Windows에서는 Google Sign-In이 지원되지 않습니다. Android 에뮬레이터로 실행하세요.',
@@ -40,21 +35,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final GoogleSignIn signIn = GoogleSignIn.instance;
-
-      // v7: initialize를 1회 호출 권장
       await signIn.initialize();
 
-      // v7: signIn() 대신 authenticate()
       final GoogleSignInAccount? googleUser = await signIn.authenticate();
-      if (googleUser == null) return null; // 일부 환경에서 null로 내려올 수 있음(취소 등)
+      if (googleUser == null) return null;
 
-      // v7: authentication은 Future가 아니라 getter(문서 기준)
       final GoogleSignInAuthentication googleAuth = googleUser.authentication;
-
       final String? idToken = googleAuth.idToken;
+
       if (idToken == null) {
         throw StateError(
-          'Google idToken이 null 입니다. Firebase 콘솔에 SHA-1 등록 및 google-services.json 재다운로드/교체를 확인하세요.',
+          'Google idToken이 null 입니다. Firebase 콘솔 SHA-1 등록 및 google-services.json 재다운로드/교체를 확인하세요.',
         );
       }
 
@@ -64,7 +55,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
       return FirebaseAuth.instance.signInWithCredential(credential);
     } on GoogleSignInException catch (e) {
-      // ✅ 취소는 실패가 아니라 "사용자 취소"로 처리
       if (e.code == GoogleSignInExceptionCode.canceled) {
         return null;
       }
@@ -77,18 +67,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final result = await _signInWithGoogle();
+      if (result == null) return;
 
-      // 취소(null)인 경우: 실패로 처리하지 않음
-      if (result == null) {
-        return;
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirestoreService.ensureUserDocument(user);
       }
 
       if (mounted) widget.onLoginSuccess();
     } on UnsupportedError catch (e) {
-      if (mounted) {
-        _showErrorMessage(e.message?.toString() ?? e.toString());
-      }
-    } catch (e) {
+      if (mounted) _showErrorMessage(e.message?.toString() ?? e.toString());
+    } catch (_) {
       if (mounted) _showErrorMessage(AppStrings.errorLoginFailed);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -97,10 +86,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleGuestLogin() async {
     setState(() => _isLoading = true);
+
     try {
-      await Future.delayed(const Duration(seconds: 1));
+      final cred = await FirebaseAuth.instance.signInAnonymously();
+      final user = cred.user;
+      if (user != null) {
+        await FirestoreService.ensureUserDocument(user);
+      }
+
       if (mounted) widget.onLoginSuccess();
-    } catch (e) {
+    } catch (_) {
       if (mounted) _showErrorMessage(AppStrings.errorUnknown);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -111,14 +106,12 @@ class _LoginScreenState extends State<LoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: AppColors.error, // 상수 적용
+        backgroundColor: AppColors.error,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 3),
       ),
     );
   }
-
-  // --- [C] UI 렌더링 영역 ---
 
   @override
   Widget build(BuildContext context) {
@@ -127,13 +120,14 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Center(
         child: Container(
           width: double.infinity,
-          constraints: const BoxConstraints(maxWidth: AppDimensions.maxContentWidth),
+          constraints:
+          const BoxConstraints(maxWidth: AppDimensions.maxContentWidth),
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Color(0xFFFFFBEA), // 온보딩 전용 그라데이션 (추후 AppColors 등록 권장)
+                Color(0xFFFFFBEA),
                 Color(0xFFEBFCF4),
               ],
             ),
@@ -142,27 +136,19 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // [Section 1] 브랜드 아이콘
                 const Icon(
                   Icons.account_balance_wallet,
-                  color: AppColors.primaryDark, // 상수 적용
-                  size: 100, // 브랜드 아이콘이므로 고정 수치 유지 혹은 AppDimensions 확장
+                  color: AppColors.primaryDark,
+                  size: 100,
                 ),
                 const SizedBox(height: AppDimensions.paddingXLarge),
-
-                // [Section 2] 브랜드 캐치프레이즈
                 const Text(
-                  AppStrings.loginTitle, // 상수 적용
+                  AppStrings.loginTitle,
                   textAlign: TextAlign.center,
-                  style: AppTextStyles.h3, // 상수 적용 (24px, Bold)
+                  style: AppTextStyles.h3,
                 ),
                 const SizedBox(height: 100),
-
-                // [Section 3] 로딩 상태 또는 버튼 레이아웃
-                if (_isLoading)
-                  _buildLoadingIndicator()
-                else
-                  _buildLoginButtons(),
+                if (_isLoading) _buildLoadingIndicator() else _buildLoginButtons(),
               ],
             ),
           ),
@@ -171,9 +157,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- [D] 컴포넌트 빌더 메서드 ---
-
-  /// 로딩 중 표시될 인디케이터
   Widget _buildLoadingIndicator() {
     return const Column(
       children: [
@@ -181,13 +164,12 @@ class _LoginScreenState extends State<LoginScreen> {
         SizedBox(height: AppDimensions.paddingMedium),
         Text(
           AppStrings.loginLoading,
-          style: AppTextStyles.bodySmall, // 상수 적용 (14px)
+          style: AppTextStyles.bodySmall,
         ),
       ],
     );
   }
 
-  /// 로그인 버튼 세트
   Widget _buildLoginButtons() {
     return Column(
       children: [
@@ -210,7 +192,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// 공용 버튼 컴포넌트
   Widget _buildButton({
     required String text,
     required Color color,
@@ -228,10 +209,8 @@ class _LoginScreenState extends State<LoginScreen> {
           height: 60,
           decoration: BoxDecoration(
             color: color,
-            borderRadius: BorderRadius.circular(AppDimensions.radiusLarge), // 상수 적용
-            border: isOutlined
-                ? Border.all(color: AppColors.divider) // 상수 적용
-                : null,
+            borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
+            border: isOutlined ? Border.all(color: AppColors.divider) : null,
             boxShadow: const [
               BoxShadow(
                 color: Colors.black12,
@@ -243,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Center(
             child: Text(
               text,
-              style: AppTextStyles.button.copyWith(color: textColor), // 상수 적용
+              style: AppTextStyles.button.copyWith(color: textColor),
             ),
           ),
         ),
