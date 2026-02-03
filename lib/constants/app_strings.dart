@@ -30,7 +30,12 @@ class AppStrings {
   static const String dashboardBudgetTitle = '이번 달 남은 예산';
   static const String dashboardInputPlaceholder = '지출을 추가하려면 가격을 입력하세요.';
   static const String dashboardCategorySelect = '지출 카테고리를 선택하세요';
-
+  static const String dashboardDeleteTitle = '지출 삭제';
+  static const String dashboardDeleteMessage = '이 내역을 삭제할까요?';
+  static const String actionCancel = '취소';
+  static const String actionDelete = '삭제';
+  static const String dashboardDeleted = '삭제되었습니다.';
+  static const String dashboardDeleteFailed = '삭제에 실패했습니다.';
   // --- [E] 에러 메시지 ---
   
   static const String errorLoginFailed = '로그인에 실패했습니다. 다시 시도해주세요.';
