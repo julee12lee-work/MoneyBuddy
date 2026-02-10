@@ -114,12 +114,12 @@ class CategorySelectionBoard extends StatelessWidget {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: brandColor.withValues(alpha: 0.08),
+              color: brandColor,
               shape: BoxShape.circle,
             ),
             child: Icon(
               cat['icon'],
-              color: brandColor,
+              color: Colors.white,
               size: AppDimensions.iconLarge,
             ),
           ),

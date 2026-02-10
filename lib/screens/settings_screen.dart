@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_dimensions.dart';
@@ -166,7 +167,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       await FirebaseAuth.instance.signOut();
-      widget.onBack?.call();
+      if (mounted) context.go('/login');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -379,7 +380,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Row(
             children: [
               IconButton(
-                onPressed: widget.onBack,
+                onPressed: () => context.go('/dashboard'),
                 icon: const Icon(
                   Icons.arrow_back_ios_rounded,
                   color: AppColors.textPrimary,

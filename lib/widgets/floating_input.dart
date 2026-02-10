@@ -3,6 +3,8 @@ import 'dart:ui';
 
 import '../constants/app_strings.dart';
 import '../models/expense_draft.dart';
+import '../utils/korean_number_parser.dart';
+import '../utils/category_matcher.dart';
 
 class MyCustomScrollBehavior extends MaterialScrollBehavior {
   @override
@@ -66,6 +68,11 @@ class _FloatingInputState extends State<FloatingInput>
   }
 
   int? _extractAmount(String text) {
+    // 한글 금액 파싱 우선 시도 (만원, 이만오천, 3만5천 등)
+    final koreanAmount = KoreanNumberParser.parse(text);
+    if (koreanAmount != null) return koreanAmount;
+
+    // 폴백: 기존 숫자 파싱
     final digits = RegExp(r'\d+')
         .allMatches(text.replaceAll(',', ''))
         .map((m) => m.group(0)!)
@@ -76,8 +83,9 @@ class _FloatingInputState extends State<FloatingInput>
   }
 
   String? _extractTitle(String input) {
-    // 숫자 제거 + "원" 제거 + 구분자 제거 후 trim
+    // 숫자 제거 + 한글 숫자/단위 제거 + "원" 제거 + 구분자 제거 후 trim
     String t = input.replaceAll(RegExp(r'(\d[\d,]*)'), ' ');
+    t = t.replaceAll(RegExp(r'[일이삼사오육칠팔구십백천만]+'), ' ');
     t = t.replaceAll(RegExp(r'(원|won)', caseSensitive: false), ' ');
     t = t.replaceAll(RegExp(r'[-–—:|]'), ' ');
     t = t.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -94,16 +102,18 @@ class _FloatingInputState extends State<FloatingInput>
     if (amount == null) return;
 
     final title = _extractTitle(raw);
+    final category = CategoryMatcher.detect(raw);
 
     // ✅ 기존 방식 유지
     widget.onAmountParsed.call(amount);
 
-    // ✅ (선택) draft도 전달
+    // ✅ draft에 카테고리 포함하여 전달
     widget.onDraftParsed?.call(
       ExpenseDraft(
         rawText: raw,
         amountAbs: amount,
         title: title,
+        category: category,
       ),
     );
 

@@ -49,6 +49,43 @@ class FirestoreService {
     );
   }
 
+  /// 예산 설정 저장 (월 예산, 기준일)
+  static Future<void> setBudgetSettings({
+    required String uid,
+    required int monthlyBudget,
+    required int startDay,
+  }) async {
+    await userDoc(uid).set(
+      {
+        'monthlyBudget': monthlyBudget,
+        'budgetStartDay': startDay,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
+  }
+
+  /// 예산 설정 불러오기 (Stream)
+  static Stream<Map<String, dynamic>> watchBudgetSettings(String uid) {
+    return userDoc(uid).snapshots().map((snap) {
+      final data = snap.data();
+      return {
+        'monthlyBudget': data?['monthlyBudget'] ?? 1000000,
+        'budgetStartDay': data?['budgetStartDay'] ?? 1,
+      };
+    });
+  }
+
+  /// 예산 설정 불러오기 (Future - 1회성)
+  static Future<Map<String, dynamic>> getBudgetSettings(String uid) async {
+    final snap = await userDoc(uid).get();
+    final data = snap.data();
+    return {
+      'monthlyBudget': data?['monthlyBudget'] ?? 1000000,
+      'budgetStartDay': data?['budgetStartDay'] ?? 1,
+    };
+  }
+
   static String iconForCategory(String category) {
     switch (category) {
       case '카페':

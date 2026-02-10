@@ -1,22 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../models/persona.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_dimensions.dart';
 import '../constants/app_strings.dart';
 import '../constants/app_text_styles.dart';
-import '../services/firestore_service.dart';
+import '../providers/auth_provider.dart';
+
+/// [Project] Buddy - AI 가계부 서비스
+/// [File] PersonaSelectionScreen - 페르소나 선택 화면
+/// [Author] 이준수 (PM & Design & Frontend)
+/// [Description]
+/// 로그인 후 F/S/T 페르소나를 선택하는 화면
+/// AuthProvider로 Firestore에 페르소나 저장 후 go_router로 대시보드 이동
+///
+/// * [Collaborators Note]
+/// - 광진: AuthProvider.updatePersonaType()이 Firestore users/{uid} 문서 업데이트
+/// - 원준: personaType 값으로 AI 피드백 톤/스타일 분기
+/// - 준수: PageView + 인디케이터 + 화살표 네비게이션 UI
 
 class PersonaSelectionScreen extends StatefulWidget {
-  final Function(int) onPersonaSelected;
-  final Function(int) onPersonaChanged;
-
-  const PersonaSelectionScreen({
-    super.key,
-    required this.onPersonaSelected,
-    required this.onPersonaChanged,
-  });
+  const PersonaSelectionScreen({super.key});
 
   @override
   State<PersonaSelectionScreen> createState() => _PersonaSelectionScreenState();
@@ -39,7 +45,7 @@ class _PersonaSelectionScreenState extends State<PersonaSelectionScreen> {
       body: Center(
         child: Container(
           constraints:
-          const BoxConstraints(maxWidth: AppDimensions.maxContentWidth),
+              const BoxConstraints(maxWidth: AppDimensions.maxContentWidth),
           decoration: const BoxDecoration(
             color: Colors.white,
             boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)],
@@ -51,7 +57,6 @@ class _PersonaSelectionScreenState extends State<PersonaSelectionScreen> {
                 itemCount: personaData.length,
                 onPageChanged: (index) {
                   setState(() => _currentPersonaIndex = index);
-                  widget.onPersonaChanged(index);
                 },
                 itemBuilder: (context, index) =>
                     _buildPersonaContent(personaData[index], index),
@@ -173,15 +178,12 @@ class _PersonaSelectionScreenState extends State<PersonaSelectionScreen> {
   Widget _buildSelectButton(Persona data) {
     return InkWell(
       onTap: () async {
-        final uid = FirebaseAuth.instance.currentUser?.uid;
-        if (uid != null) {
-          try {
-            await FirestoreService.setPersonaIndex(uid, _currentPersonaIndex);
-          } catch (_) {
-            // 저장 실패해도 UX는 진행 (원하면 SnackBar 추가 가능)
-          }
-        }
-        widget.onPersonaSelected(_currentPersonaIndex);
+        // [광진] Provider를 통해 Firestore에 페르소나 저장
+        final authProvider = context.read<AuthProvider>();
+        await authProvider.updatePersonaType(data.type);
+
+        // go_router로 대시보드 이동
+        if (mounted) context.go('/dashboard');
       },
       borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
       child: Container(
@@ -221,19 +223,19 @@ class _PersonaSelectionScreenState extends State<PersonaSelectionScreen> {
           children: [
             _currentPersonaIndex > 0
                 ? _arrowButton(Icons.arrow_back_ios_new_rounded, () {
-              _personaController.previousPage(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.ease,
-              );
-            })
+                    _personaController.previousPage(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.ease,
+                    );
+                  })
                 : const SizedBox(width: 48),
             _currentPersonaIndex < personaData.length - 1
                 ? _arrowButton(Icons.arrow_forward_ios_rounded, () {
-              _personaController.nextPage(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.ease,
-              );
-            })
+                    _personaController.nextPage(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.ease,
+                    );
+                  })
                 : const SizedBox(width: 48),
           ],
         ),

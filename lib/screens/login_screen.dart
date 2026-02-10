@@ -1,127 +1,37 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart'
-    show kIsWeb, defaultTargetPlatform, TargetPlatform;
-
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
 import '../constants/app_dimensions.dart';
 import '../constants/app_strings.dart';
 import '../constants/app_text_styles.dart';
-import '../services/firestore_service.dart';
+import '../providers/auth_provider.dart';
 
-class LoginScreen extends StatefulWidget {
-  final VoidCallback onLoginSuccess;
+/// [Project] Buddy - AI 가계부 서비스
+/// [File] LoginScreen - 로그인 화면
+/// [Author] 이준수 (PM & Design & Frontend)
+/// [Description]
+/// Google 소셜 로그인 + 게스트(익명) 로그인
+/// AuthProvider를 통해 인증 처리, go_router redirect가 자동 화면 전환
+///
+/// * [Collaborators Note]
+/// - 광진: AuthProvider.signInWithGoogle()이 Firebase Auth + Firestore 프로필 생성
+/// - 준수: UI 레이아웃 및 로딩/에러 상태 표시
 
-  const LoginScreen({
-    super.key,
-    required this.onLoginSuccess,
-  });
-
-  @override
-  State<LoginScreen> createState() => _LoginScreenState();
-}
-
-class _LoginScreenState extends State<LoginScreen> {
-  bool _isLoading = false;
-
-  Future<UserCredential?> _signInWithGoogle() async {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
-      throw UnsupportedError(
-        'Windows에서는 Google Sign-In이 지원되지 않습니다. Android 에뮬레이터로 실행하세요.',
-      );
-    }
-
-    try {
-      final GoogleSignIn signIn = GoogleSignIn.instance;
-      await signIn.initialize();
-
-      final GoogleSignInAccount? googleUser = await signIn.authenticate();
-      if (googleUser == null) return null;
-
-      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
-      final String? idToken = googleAuth.idToken;
-
-      if (idToken == null) {
-        throw StateError(
-          'Google idToken이 null 입니다. Firebase 콘솔 SHA-1 등록 및 google-services.json 재다운로드/교체를 확인하세요.',
-        );
-      }
-
-      final OAuthCredential credential = GoogleAuthProvider.credential(
-        idToken: idToken,
-      );
-
-      return FirebaseAuth.instance.signInWithCredential(credential);
-    } on GoogleSignInException catch (e) {
-      if (e.code == GoogleSignInExceptionCode.canceled) {
-        return null;
-      }
-      rethrow;
-    }
-  }
-
-  Future<void> _handleGoogleLogin() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final result = await _signInWithGoogle();
-      if (result == null) return;
-
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        await FirestoreService.ensureUserDocument(user);
-      }
-
-      if (mounted) widget.onLoginSuccess();
-    } on UnsupportedError catch (e) {
-      if (mounted) _showErrorMessage(e.message?.toString() ?? e.toString());
-    } catch (_) {
-      if (mounted) _showErrorMessage(AppStrings.errorLoginFailed);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _handleGuestLogin() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final cred = await FirebaseAuth.instance.signInAnonymously();
-      final user = cred.user;
-      if (user != null) {
-        await FirestoreService.ensureUserDocument(user);
-      }
-
-      if (mounted) widget.onLoginSuccess();
-    } catch (_) {
-      if (mounted) _showErrorMessage(AppStrings.errorUnknown);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _showErrorMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
+class LoginScreen extends StatelessWidget {
+  const LoginScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Center(
         child: Container(
           width: double.infinity,
           constraints:
-          const BoxConstraints(maxWidth: AppDimensions.maxContentWidth),
+              const BoxConstraints(maxWidth: AppDimensions.maxContentWidth),
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
@@ -148,7 +58,18 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: AppTextStyles.h3,
                 ),
                 const SizedBox(height: 100),
-                if (_isLoading) _buildLoadingIndicator() else _buildLoginButtons(),
+                if (authProvider.isLoading)
+                  _buildLoadingIndicator()
+                else
+                  _buildLoginButtons(context, authProvider),
+                if (authProvider.error != null) ...[
+                  const SizedBox(height: AppDimensions.paddingMedium),
+                  Text(
+                    authProvider.error!,
+                    style: AppTextStyles.caption.copyWith(color: AppColors.error),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ],
             ),
           ),
@@ -170,7 +91,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildLoginButtons() {
+  Widget _buildLoginButtons(BuildContext context, AuthProvider authProvider) {
     return Column(
       children: [
         _buildButton(
@@ -178,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
           color: Colors.white,
           textColor: AppColors.textPrimary,
           isOutlined: true,
-          onTap: _handleGoogleLogin,
+          onTap: () => authProvider.signInWithGoogle(),
         ),
         const SizedBox(height: AppDimensions.paddingMedium),
         _buildButton(
@@ -186,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
           color: Colors.white.withValues(alpha: 0.5),
           textColor: AppColors.textSecondary,
           isOutlined: false,
-          onTap: _handleGuestLogin,
+          onTap: () => authProvider.signInAnonymously(),
         ),
       ],
     );

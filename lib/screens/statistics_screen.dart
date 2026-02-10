@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_dimensions.dart';
 import '../constants/app_text_styles.dart';
@@ -232,7 +233,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             children: [
               // 왼쪽: 뒤로가기 버튼
               IconButton(
-                onPressed: widget.onBack,
+                onPressed: () => context.go('/dashboard'),
                 icon: const Icon(
                   Icons.arrow_back_ios_rounded,
                   color: AppColors.textPrimary,
