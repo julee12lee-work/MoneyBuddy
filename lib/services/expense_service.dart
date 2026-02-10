@@ -15,7 +15,7 @@ class ExpenseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   /// 유저별 expenses 컬렉션 참조 헬퍼
-  CollectionReference _expensesRef(String uid) {
+  CollectionReference<Map<String, dynamic>> _expensesRef(String uid) {
     return _firestore.collection('users').doc(uid).collection('expenses');
   }
 
@@ -31,7 +31,7 @@ class ExpenseService {
   /// [광진] 월별 데이터를 Stream으로 반환, UI에서 StreamBuilder/Provider로 구독
   /// [param] month: "2026-02" 형식
   Stream<List<Expense>> getExpensesStream(String uid, {String? month}) {
-    Query query = _expensesRef(uid).orderBy('createdAt', descending: true);
+    Query<Map<String, dynamic>> query = _expensesRef(uid).orderBy('createdAt', descending: true);
 
     // 월별 필터링
     if (month != null) {

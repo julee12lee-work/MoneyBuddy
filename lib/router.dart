@@ -2,7 +2,10 @@ import 'package:go_router/go_router.dart';
 import 'providers/auth_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/persona_selection_screen.dart';
+import 'models/persona.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/statistics_screen.dart';
+import 'screens/settings_screen.dart';
 
 /// [Project] Buddy - AI 가계부 서비스
 /// [File] AppRouter - go_router 기반 네비게이션
@@ -28,8 +31,8 @@ class AppRouter {
         // 로그인 상태인데 로그인 페이지에 있으면 → 페르소나 설정 여부 확인
         if (isLoggedIn && isOnLogin) {
           final profile = authProvider.userProfile;
-          // 신규 유저(예산 미설정) → 페르소나 선택으로
-          if (profile == null || profile.monthlyBudget == 0) {
+          // 신규 유저(페르소나 미선택) → 페르소나 선택으로
+          if (profile == null || profile.personaType.isEmpty) {
             return '/persona';
           }
           return '/dashboard';
@@ -49,6 +52,20 @@ class AppRouter {
         GoRoute(
           path: '/dashboard',
           builder: (context, state) => const DashboardScreen(),
+        ),
+        GoRoute(
+          path: '/statistics',
+          builder: (context, state) {
+            final personaType = authProvider.userProfile?.personaType ?? 'F-type';
+            final index = personaData.indexWhere((p) => p.type == personaType).clamp(0, personaData.length - 1);
+            return StatisticsScreen(
+              selectedPersonaIndex: index,
+            );
+          },
+        ),
+        GoRoute(
+          path: '/settings',
+          builder: (context, state) => const SettingsScreen(),
         ),
       ],
     );

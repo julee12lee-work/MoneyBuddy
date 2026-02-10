@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../models/persona.dart';
@@ -20,6 +21,7 @@ import '../widgets/monthly_calendar.dart';
 import '../widgets/side_menu.dart';
 import '../widgets/floating_input.dart';
 import '../widgets/category_selection_board.dart';
+import '../widgets/budget_setting_dialog.dart';
 
 /// [Project] Buddy - AI 가계부 서비스
 /// [File] DashboardScreen - 메인 대시보드
@@ -134,33 +136,80 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  void _openBudgetSettingDialog({
+    required String uid,
+    required int currentBudget,
+    required int currentStartDay,
+  }) {
+    BudgetSettingDialog.show(
+      context: context,
+      currentBudget: currentBudget,
+      currentStartDay: currentStartDay,
+      onSave: (budget, startDay) async {
+        try {
+          await FirestoreService.setBudgetSettings(
+            uid: uid,
+            monthlyBudget: budget,
+            startDay: startDay,
+          );
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('예산이 설정되었습니다.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('예산 설정 실패: $e'),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      },
+    );
+  }
+
   Widget _buildMainScrollArea({
     required String uid,
     required Color personaColor,
     required Color brandColor,
     required int selectedPersonaIndex,
   }) {
-    return StreamBuilder<List<Expense>>(
-      stream: FirestoreService.watchThisMonthExpenses(uid),
-      builder: (context, snapshot) {
-        final expenses = snapshot.data ?? const <Expense>[];
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: FirestoreService.watchBudgetSettings(uid),
+      builder: (context, budgetSnapshot) {
+        final budgetData = budgetSnapshot.data ?? {'monthlyBudget': 1000000, 'budgetStartDay': 1};
+        final int totalBudget = budgetData['monthlyBudget'] as int;
+        final int startDay = budgetData['budgetStartDay'] as int;
 
-        // MVP: 예산은 임시 고정. 이번달 지출(음수) 합산으로 남은 예산 계산.
-        const int totalBudget = 5000000;
-        final int sum = expenses.fold<int>(0, (s, e) => s + e.amount); // 지출 음수
-        final int budgetRemaining = totalBudget + sum;
+        return StreamBuilder<List<Expense>>(
+          stream: FirestoreService.watchThisMonthExpenses(uid),
+          builder: (context, snapshot) {
+            final expenses = snapshot.data ?? const <Expense>[];
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: AppDimensions.bottomInputPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              MainHeader(
-                budgetRemaining: budgetRemaining,
-                totalBudget: totalBudget,
-                selectedPersonaIndex: selectedPersonaIndex,
-                onMenuPressed: () => setState(() => isMenuOpen = true),
-              ),
+            final int sum = expenses.fold<int>(0, (s, e) => s + e.amount);
+            final int budgetRemaining = totalBudget + sum;
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.only(bottom: AppDimensions.bottomInputPadding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  MainHeader(
+                    budgetRemaining: budgetRemaining,
+                    totalBudget: totalBudget,
+                    selectedPersonaIndex: selectedPersonaIndex,
+                    onMenuPressed: () => setState(() => isMenuOpen = true),
+                    onBudgetTapped: () => _openBudgetSettingDialog(
+                      uid: uid,
+                      currentBudget: totalBudget,
+                      currentStartDay: startDay,
+                    ),
+                  ),
               const SizedBox(height: AppDimensions.cardSpacing),
 
               if (isCategoryMode)
@@ -211,6 +260,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ],
           ),
+        );
+          },
         );
       },
     );
@@ -277,6 +328,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onClose: () => setState(() => isMenuOpen = false),
           onMenuSelected: (index) {
             setState(() => isMenuOpen = false);
+            if (index == 1) {
+              context.go('/persona');
+            } else if (index == 2) {
+              context.go('/statistics');
+            } else if (index == 3) {
+              context.go('/settings');
+            }
           },
         ),
       ),
@@ -299,7 +357,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             border: Border.all(color: Colors.grey.shade100),
           ),
           child: const Text(
-            '아직 이번 달 지출 내역이 없어요.\n아래 입력창에서 “커피 1000”처럼 입력해보세요!',
+            '아직 이번 달 지출 내역이 없어요.\n아래 입력창에서 "커피 1000"처럼 입력해보세요!',
             style: TextStyle(color: Colors.black54),
           ),
         ),

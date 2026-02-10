@@ -86,7 +86,7 @@ class ExpenseProvider extends ChangeNotifier {
       amount: amount,
       category: category,
       icon: icon,
-      title: title,
+      title: title ?? category,
     );
 
     final docId = await _expenseService.addExpense(expense);

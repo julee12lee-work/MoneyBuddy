@@ -88,6 +88,7 @@ class AuthService {
       uid: user.uid,
       displayName: user.displayName ?? '사용자',
       photoUrl: user.photoURL,
+      personaType: '',
     );
 
     await _firestore.collection('users').doc(user.uid).set(profile.toMap());
