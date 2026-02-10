@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
+import 'package:provider/provider.dart';
 
 import '../models/persona.dart';
 import '../models/expense.dart';
@@ -9,6 +10,7 @@ import '../constants/app_colors.dart';
 import '../constants/app_dimensions.dart';
 
 import '../services/firestore_service.dart';
+import '../providers/auth_provider.dart';
 
 import '../widgets/main_header.dart';
 import '../widgets/feed_header.dart';
@@ -19,13 +21,17 @@ import '../widgets/side_menu.dart';
 import '../widgets/floating_input.dart';
 import '../widgets/category_selection_board.dart';
 
+/// [Project] Buddy - AI 가계부 서비스
+/// [File] DashboardScreen - 메인 대시보드
+/// [Description]
+/// Provider에서 유저/지출 데이터를 구독하여 실시간 렌더링
+///
+/// * [Collaborators Note]
+/// - 광진: ExpenseProvider가 Firestore 실시간 스트림 제공
+/// - 원준: PersonaSpeechBubble의 AI 코멘트 연동 예정
+/// - 준수: FeedCard, FloatingInput 등 위젯 조합
 class DashboardScreen extends StatefulWidget {
-  final int selectedPersonaIndex;
-
-  const DashboardScreen({
-    super.key,
-    required this.selectedPersonaIndex,
-  });
+  const DashboardScreen({super.key});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -51,7 +57,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final selectedPersona = personaData[widget.selectedPersonaIndex];
+    // [광진] AuthProvider에서 페르소나 인덱스 가져오기
+    final authProvider = context.watch<AuthProvider>();
+    final personaType = authProvider.userProfile?.personaType ?? 'F-type';
+    final selectedPersonaIndex = personaData.indexWhere((p) => p.type == personaType).clamp(0, personaData.length - 1);
+    final selectedPersona = personaData[selectedPersonaIndex];
     final Color personaColor = selectedPersona.color;
     const Color brandColor = AppColors.primary;
 
@@ -82,6 +92,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   uid: user.uid,
                   personaColor: personaColor,
                   brandColor: brandColor,
+                  selectedPersonaIndex: selectedPersonaIndex,
                 ),
               ),
               if (isMenuOpen)
@@ -127,6 +138,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required String uid,
     required Color personaColor,
     required Color brandColor,
+    required int selectedPersonaIndex,
   }) {
     return StreamBuilder<List<Expense>>(
       stream: FirestoreService.watchThisMonthExpenses(uid),
@@ -146,7 +158,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               MainHeader(
                 budgetRemaining: budgetRemaining,
                 totalBudget: totalBudget,
-                selectedPersonaIndex: widget.selectedPersonaIndex,
+                selectedPersonaIndex: selectedPersonaIndex,
                 onMenuPressed: () => setState(() => isMenuOpen = true),
               ),
               const SizedBox(height: AppDimensions.cardSpacing),
