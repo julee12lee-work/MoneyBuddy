@@ -21,10 +21,16 @@ import '../widgets/category_selection_board.dart';
 
 class DashboardScreen extends StatefulWidget {
   final int selectedPersonaIndex;
+  final VoidCallback? onNavigateToPersona;
+  final VoidCallback? onNavigateToStatistics;
+  final VoidCallback? onNavigateToSettings;
 
   const DashboardScreen({
     super.key,
     required this.selectedPersonaIndex,
+    this.onNavigateToPersona,
+    this.onNavigateToStatistics,
+    this.onNavigateToSettings,
   });
 
   @override
@@ -265,6 +271,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onClose: () => setState(() => isMenuOpen = false),
           onMenuSelected: (index) {
             setState(() => isMenuOpen = false);
+            if (index == 1 && widget.onNavigateToPersona != null) {
+              widget.onNavigateToPersona!();
+            } else if (index == 2 && widget.onNavigateToStatistics != null) {
+              widget.onNavigateToStatistics!();
+            } else if (index == 3 && widget.onNavigateToSettings != null) {
+              widget.onNavigateToSettings!();
+            }
           },
         ),
       ),
