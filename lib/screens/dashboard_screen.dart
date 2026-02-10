@@ -111,20 +111,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: SafeArea(
                     top: false,
                     child: FloatingInput(
-                      // 기존 파서(금액만)
+                      // 기존 파서(금액만) - draft 없을 때 폴백
                       onAmountParsed: (amount) {
                         setState(() {
                           tempAmount = amount;
                           isCategoryMode = true;
                         });
                       },
-                      // 개선 파서(제목 포함)
+                      // 스마트 파서(제목 + 카테고리 자동 감지)
                       onDraftParsed: (ExpenseDraft draft) {
-                        setState(() {
-                          tempAmount = draft.amountAbs;
-                          tempTitle = draft.title;
-                          isCategoryMode = true;
-                        });
+                        if (draft.category != null) {
+                          // 카테고리 자동 감지됨 → 바로 저장, 선택 보드 스킵
+                          setState(() {
+                            tempAmount = draft.amountAbs;
+                            tempTitle = draft.title;
+                          });
+                          _saveExpense(
+                            uid: FirebaseAuth.instance.currentUser!.uid,
+                            category: draft.category!,
+                          );
+                        } else {
+                          // 카테고리 미감지 → 기존 수동 선택
+                          setState(() {
+                            tempAmount = draft.amountAbs;
+                            tempTitle = draft.title;
+                            isCategoryMode = true;
+                          });
+                        }
                       },
                     ),
                   ),
